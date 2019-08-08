@@ -1,0 +1,27 @@
+This package contains implementations for LAMMPS of a number of
+miscellaneous methods created by J. Matthew ("Matt") Mansell and
+at North Carolina State University.
+
+compute force/atom computes the total compressive force acting on
+each atom in the simulation box, and stores this as a per-atom
+vector.
+
+For technical details, etc., see the following papers and 
+presentations:
+
+TBD
+
+See the doc pages for these commands for details of how to use them
+ in LAMMPS.
+
+The person who created this package is J. Matthew ("Matt") Mansell
+at NC State University ( jmmansel at ncsu.edu ). Contacted him if you
+have questions.
+
+--------------------------------------
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+  See the GNU General Public License for more details:
+  <http://www.gnu.org/licenses/>.
