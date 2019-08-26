@@ -11,12 +11,15 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#include "compute_stress_atom.h"
+#include "compute_compforce_atom.h"
+#include <cmath>
 #include "atom.h"
 #include "update.h"
+#include "neighbor.h"
 #include "neigh_request.h"
 #include "neigh_list.h"
 #include "force.h"
+#include "pair.h"
 #include "memory.h"
 #include "error.h"
 
@@ -26,10 +29,14 @@ enum{NOBIAS,BIAS};
 
 /* ---------------------------------------------------------------------- */
 
-ComputeCompForce::ComputeCompForce(LAMMPS *lmp, int narg, char **arg) :
-  Compute(lmp, narg, arg), compforce(NULL), peratom_flag(1),
-    size_peratom_cols(4), timeflag(1), comm_reverse(4)
+ComputeCompForceAtom::ComputeCompForceAtom(LAMMPS *lmp, int narg, char **arg) :
+  Compute(lmp, narg, arg), compforce(NULL)
 {
+  peratom_flag = 1;
+  size_peratom_cols = 4;
+  comm_reverse = 4;
+  timeflag = 1;
+  
   if (narg < 3) error->all(FLERR,"Illegal compute compforce/atom command");
 
   nmax = 0;
@@ -37,14 +44,14 @@ ComputeCompForce::ComputeCompForce(LAMMPS *lmp, int narg, char **arg) :
 
 /* ---------------------------------------------------------------------- */
 
-ComputeCompForce::~ComputeCompForce()
+ComputeCompForceAtom::~ComputeCompForceAtom()
 {
   memory->destroy(compforce);
 }
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeCompForce::init()
+void ComputeCompForceAtom::init()
 {
   // need an occasional full neighbor list
   int irequest = neighbor->request(this,instance_me);
@@ -57,14 +64,14 @@ void ComputeCompForce::init()
 
 /* ---------------------------------------------------------------------- */
 
-void ComputePressureCyl::init_list(int /* id */, NeighList *ptr)
+void ComputeCompForceAtom::init_list(int /* id */, NeighList *ptr)
 {
   list = ptr;
 }
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeCompForce::compute_peratom()
+void ComputeCompForceAtom::compute_peratom()
 {
   invoked_peratom = update->ntimestep;
   
@@ -80,7 +87,7 @@ void ComputeCompForce::compute_peratom()
   
   int i,j,ii,jj,inum,jnum,itype,jtype;
   double xtmp,ytmp,ztmp,delx,dely,delz,fpair;
-  double rsq,factor_lj,cfx,cfy,cfz,cfmag;
+  double rsq,factor_lj,factor_coul,cfx,cfy,cfz,cfmag;
   int *ilist,*jlist,*numneigh,**firstneigh;
 
   for (i = 0; i < nmax; i++)
@@ -123,8 +130,8 @@ void ComputeCompForce::compute_peratom()
       rsq = delx*delx + dely*dely + delz*delz;
       jtype = type[j];
 
-      if (rsq < cutsq[itype][jtype]) {
-        pair->single(i,j,itype,jtype,rsq,factor_coul,factor_lj,fpair);
+      if (rsq < force->pair->cutsq[itype][jtype]) {
+        force->pair->single(i,j,itype,jtype,rsq,factor_coul,factor_lj,fpair);
 
         cfx = fabs(delx)*fpair;
         cfy = fabs(dely)*fpair;
@@ -144,7 +151,7 @@ void ComputeCompForce::compute_peratom()
    memory usage of local atom-based array
 ------------------------------------------------------------------------- */
 
-double ComputeCompForce::memory_usage()
+double ComputeCompForceAtom::memory_usage()
 {
   double bytes = nmax*4 * sizeof(double);
   return bytes;

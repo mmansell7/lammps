@@ -13,30 +13,26 @@
 
 #ifdef COMPUTE_CLASS
 
-ComputeStyle(compforce/atom,ComputeCompForceAtom)
+ComputeStyle(opcyl/radial,ComputeOPCylRadial)
 
 #else
 
-#ifndef LMP_COMPUTE_COMPFORCE_ATOM_H
-#define LMP_COMPUTE_COMPFORCE_ATOM_H
+#ifndef LMP_COMPUTE_OPCYL_RADIAL
+#define LMP_COMPUTE_OPCYL_RADIAL
 
 #include "compute.h"
 
 namespace LAMMPS_NS {
 
-class ComputeCompForceAtom : public Compute {
+class ComputeOPCylRadial : public Compute {
  public:
-  ComputeCompForceAtom(class LAMMPS *, int, char **);
-  ~ComputeCompForceAtom();
-  void init();
-  void init_list(int, class NeighList *);
-  void compute_peratom();
-  double memory_usage();
+  ComputeOPCylRadial(class LAMMPS *, int, char **);
+  virtual ~ComputeOPCylRadial();
+  void init() {};
+  virtual double compute_scalar();
 
  private:
-  int nmax;
-  double **compforce;
-  class NeighList *list;
+
 };
 
 }
@@ -53,3 +49,5 @@ documentation for the command.  You can use -echo screen as a
 command-line option when running LAMMPS to see the offending line.
 
 */
+
+

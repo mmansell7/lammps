@@ -13,30 +13,28 @@
 
 #ifdef COMPUTE_CLASS
 
-ComputeStyle(compforce/atom,ComputeCompForceAtom)
+ComputeStyle(gyration/shape,ComputeGyrationShape)
 
 #else
 
-#ifndef LMP_COMPUTE_COMPFORCE_ATOM_H
-#define LMP_COMPUTE_COMPFORCE_ATOM_H
+#ifndef LMP_COMPUTE_GYRATION_SHAPE_H
+#define LMP_COMPUTE_GYRATION_SHAPE_H
 
 #include "compute.h"
 
 namespace LAMMPS_NS {
 
-class ComputeCompForceAtom : public Compute {
+class ComputeGyrationShape : public Compute {
  public:
-  ComputeCompForceAtom(class LAMMPS *, int, char **);
-  ~ComputeCompForceAtom();
+  char *id_gyration;              // fields accessed by other classes
+
+  ComputeGyrationShape(class LAMMPS *, int, char **);
+  ~ComputeGyrationShape();
   void init();
-  void init_list(int, class NeighList *);
-  void compute_peratom();
-  double memory_usage();
+  void compute_vector();
 
  private:
-  int nmax;
-  double **compforce;
-  class NeighList *list;
+  class Compute *c_gyration;
 };
 
 }
@@ -52,4 +50,11 @@ Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running LAMMPS to see the offending line.
 
+E: Compute gyration ID does not exist for compute gyration/shape
+
+Self-explanatory.  Provide a valid compute ID
+
+E: Compute gyration/shape compute ID does not point to a gyration compute
+
+Self-explanatory.  Provide an ID of a compute gyration command.
 */

@@ -13,30 +13,30 @@
 
 #ifdef COMPUTE_CLASS
 
-ComputeStyle(compforce/atom,ComputeCompForceAtom)
+ComputeStyle(opcyl/deltazt,ComputeOPCylDeltaZT)
 
 #else
 
-#ifndef LMP_COMPUTE_COMPFORCE_ATOM_H
-#define LMP_COMPUTE_COMPFORCE_ATOM_H
+#ifndef LMP_COMPUTE_OPCYL_DELTAZT
+#define LMP_COMPUTE_OPCYL_DELTAZT
 
 #include "compute.h"
 
 namespace LAMMPS_NS {
 
-class ComputeCompForceAtom : public Compute {
+class ComputeOPCylDeltaZT : public Compute {
  public:
-  ComputeCompForceAtom(class LAMMPS *, int, char **);
-  ~ComputeCompForceAtom();
+  ComputeOPCylDeltaZT(class LAMMPS *, int, char **);
+  virtual ~ComputeOPCylDeltaZT();
   void init();
   void init_list(int, class NeighList *);
-  void compute_peratom();
-  double memory_usage();
+  virtual double compute_scalar();
 
  private:
-  int nmax;
-  double **compforce;
+  void sortdoubles(double *, bigint);
+  double *ztlocal,*ztglobal;
   class NeighList *list;
+
 };
 
 }
@@ -51,5 +51,9 @@ E: Illegal ... command
 Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running LAMMPS to see the offending line.
+
+W: More than one compute opcyl/deltazt
+
+It is not efficient to use compute deltazt/atom more than once.
 
 */

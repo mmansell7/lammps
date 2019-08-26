@@ -13,30 +13,43 @@
 
 #ifdef COMPUTE_CLASS
 
-ComputeStyle(compforce/atom,ComputeCompForceAtom)
+ComputeStyle(helicityangle/atom,ComputeHelicityAngleAtom)
 
 #else
 
-#ifndef LMP_COMPUTE_COMPFORCE_ATOM_H
-#define LMP_COMPUTE_COMPFORCE_ATOM_H
+#ifndef LMP_COMPUTE_HELICITYANGLE_ATOM_H
+#define LMP_COMPUTE_HELICITYANGLE_ATOM_H
 
 #include "compute.h"
 
 namespace LAMMPS_NS {
 
-class ComputeCompForceAtom : public Compute {
+class ComputeHelicityAngleAtom : public Compute {
  public:
-  ComputeCompForceAtom(class LAMMPS *, int, char **);
-  ~ComputeCompForceAtom();
+  ComputeHelicityAngleAtom(class LAMMPS *, int, char **);
+  ~ComputeHelicityAngleAtom();
   void init();
   void init_list(int, class NeighList *);
   void compute_peratom();
+  int pack_forward_comm(int, int *, double *, int, int *);
+  void unpack_forward_comm(int, int, double *);
   double memory_usage();
+  enum {NONE,CUTOFF,ORIENT};
 
  private:
-  int nmax;
-  double **compforce;
+  int nmax,ncol;
+  double cutsq;
   class NeighList *list;
+
+  int *typelo,*typehi;
+  double *cvec,*zpmins;
+  double **carray;
+
+  // class ComputeOrientOrderAtom *c_orientorder;
+  // char *id_orientorder;
+  double threshold;
+  double **normv;
+  int cstyle,nqlist,l;
 };
 
 }
@@ -51,5 +64,18 @@ E: Illegal ... command
 Self-explanatory.  Check the input script syntax and compare to the
 documentation for the command.  You can use -echo screen as a
 command-line option when running LAMMPS to see the offending line.
+
+E: Compute helicityangle/atom requires a pair style be defined
+
+Self-explanatory.
+
+E: Compute helicityangle/atom cutoff is longer than pairwise cutoff
+
+Cannot identify neighbors at distances longer than the pair cutoff,
+since those atoms are not in the neighbor list.
+
+W: More than one compute helicityangle/atom
+
+It is not efficient to use compute helicityangle/atom more than once.
 
 */

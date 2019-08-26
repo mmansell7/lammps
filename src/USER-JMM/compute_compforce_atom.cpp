@@ -8,39 +8,38 @@
    certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
-   This compute was created by J. Matthew ("Matt") Mansell, North
-   Caroline State University, August 2019.
-
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
 #include "compute_compforce_atom.h"
-#include <cstring>
+#include <cmath>
 #include "atom.h"
 #include "update.h"
-#include "comm.h"
+#include "neighbor.h"
+#include "neigh_request.h"
+#include "neigh_list.h"
 #include "force.h"
 #include "pair.h"
-#include "bond.h"
-#include "angle.h"
-#include "dihedral.h"
-#include "improper.h"
-#include "kspace.h"
-#include "modify.h"
 #include "memory.h"
 #include "error.h"
 
 using namespace LAMMPS_NS;
 
+enum{NOBIAS,BIAS};
+
 /* ---------------------------------------------------------------------- */
 
 ComputeCompForceAtom::ComputeCompForceAtom(LAMMPS *lmp, int narg, char **arg) :
-  Compute(lmp, narg, arg)
+  Compute(lmp, narg, arg), compforce(NULL)
 {
-  if (narg != 3) error->all(FLERR,"Illegal compute compforce/atom command");
+  peratom_flag = 1;
+  size_peratom_cols = 4;
+  comm_reverse = 4;
+  timeflag = 1;
+  
+  if (narg < 3) error->all(FLERR,"Illegal compute compforce/atom command");
 
   nmax = 0;
-
 }
 
 /* ---------------------------------------------------------------------- */
@@ -50,10 +49,22 @@ ComputeCompForceAtom::~ComputeCompForceAtom()
   memory->destroy(compforce);
 }
 
+/* ---------------------------------------------------------------------- */
+
+void ComputeCompForceAtom::init()
+{
+  // need an occasional full neighbor list
+  int irequest = neighbor->request(this,instance_me);
+  neighbor->requests[irequest]->pair = 0;
+  neighbor->requests[irequest]->compute = 1;
+  neighbor->requests[irequest]->occasional = 1;
+  neighbor->requests[irequest]->half = 0;
+  neighbor->requests[irequest]->full = 1;
+}
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeCompForceAtom::init_list(int /*id*/, NeighList *ptr)
+void ComputeCompForceAtom::init_list(int /* id */, NeighList *ptr)
 {
   list = ptr;
 }
@@ -62,81 +73,34 @@ void ComputeCompForceAtom::init_list(int /*id*/, NeighList *ptr)
 
 void ComputeCompForceAtom::compute_peratom()
 {
-  int i;
-
-  // grow local compforce array if necessary
+  invoked_peratom = update->ntimestep;
+  
+  // grow compforce array if necessary
   // needs to be atom->nmax in length
 
   if (atom->nmax > nmax) {
     memory->destroy(compforce);
     nmax = atom->nmax;
-    memory->create(compforce,nmax,"compforce/atom:compforce");
-    vector_atom = compforce;
+    memory->create(compforce,nmax,4,"compforce/atom:compforce");
+    array_atom = compforce;
   }
-
-  // npair includes ghosts if either newton flag is set
-  //   b/c some bonds/dihedrals call pair::ev_tally with pairwise info
-
-  int nlocal = atom->nlocal;
-  int npair = nlocal;
-  if (force->newton) npair += atom->nghost;
-
-  // clear local compforce array
-
-  for (i = 0; i < npair; i++) compforce[i] = 0.0;
-
-  // add in per-atom contributions from each pair force
-
-  if (force->pair) {
-    double *cfatom = force->pair->eatom;
-    for (i = 0; i < npair; i++) compforce[i] += eatom[i];
-  }
-
-  // add in per-atom contributions from relevant fixes
-  // always only for owned atoms, not ghost
-
-  if (fixflag && modify->n_thermo_compforce_atom)
-    modify->thermo_compforce_atom(nlocal,compforce);
-
-  // communicate ghost compforce between neighbor procs
-
-  if (force->newton || (force->kspace && force->kspace->tip4pflag))
-    comm->reverse_comm_compute(this);
-
-  // zero compforce of atoms not in group
-  // only do this after comm since ghost contributions must be included
-
-  int *mask = atom->mask;
-
-  for (i = 0; i < nlocal; i++)
-    if (!(mask[i] & groupbit)) compforce[i] = 0.0;
-}
-
-
-
-
-
-
-
-/* ---------------------------------------------------------------------- */
-
-void ComputeCompForceAtom::pair_contribution()
-{
-  int i,j,ii,jj,inum,jnum;
-  double delx,dely,delz;
-  double rsq,eng,cf,fpair,factor_coul,factor_lj;
+  
+  int i,j,ii,jj,inum,jnum,itype,jtype;
+  double xtmp,ytmp,ztmp,delx,dely,delz,fpair;
+  double rsq,factor_lj,factor_coul,cfx,cfy,cfz,cfmag;
   int *ilist,*jlist,*numneigh,**firstneigh;
 
-  tagint *molecule = atom->molecule;
-  int *mask = atom->mask;
+  for (i = 0; i < nmax; i++)
+    for (j = 0; j < 4; j++)
+      compforce[i][j] = 0.0;
+      
+  double **x = atom->x;
+  double **f = atom->f;
+  int *type = atom->type;
   int nlocal = atom->nlocal;
-  double *special_coul = force->special_coul;
   double *special_lj = force->special_lj;
+  double *special_coul = force->special_coul;
   int newton_pair = force->newton_pair;
-
-  // invoke half neighbor list (will copy or build if necessary)
-
-  neighbor->build_one(list);
 
   inum = list->inum;
   ilist = list->ilist;
@@ -145,14 +109,14 @@ void ComputeCompForceAtom::pair_contribution()
 
   // loop over neighbors of my atoms
 
-  double cf[4];
-  cf[0] = cf[1] = cf[2] = cf[3] = 0.0;
-
   for (ii = 0; ii < inum; ii++) {
     i = ilist[ii];
-
+    xtmp = x[i][0];
+    ytmp = x[i][1];
+    ztmp = x[i][2];
+    itype = type[i];
     jlist = firstneigh[i];
-    jnum  = numneigh[i];
+    jnum = numneigh[i];
 
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
@@ -160,61 +124,26 @@ void ComputeCompForceAtom::pair_contribution()
       factor_coul = special_coul[sbmask(j)];
       j &= NEIGHMASK;
 
-      delx = atom->x[i][0] - atom->x[j][0];
-      dely = atom->x[i][1] - atom->x[j][1];
-      delz = atom->x[i][2] - atom->x[j][2];
+      delx = xtmp - x[j][0];
+      dely = ytmp - x[j][1];
+      delz = ztmp - x[j][2];
       rsq = delx*delx + dely*dely + delz*delz;
+      jtype = type[j];
 
-      if (rsq < cutsq[atom->type[i]][atom->type[j]]) {
-        eng    = pair->single(i,j,atom->type[i],atom->type[j],rsq,factor_coul,factor_lj,fpair);
-        
-        cf[1] += fabs(delx)*fpair;
-        cf[2] += fabs(dely)*fpair;
-        cf[3] += fabs(delz)*fpair;
-        cf[0] += sqrt(cf[1]*cf[1] + cf[2]*cf[2] + cf[3]*cf[3]);
+      if (rsq < force->pair->cutsq[itype][jtype]) {
+        force->pair->single(i,j,itype,jtype,rsq,factor_coul,factor_lj,fpair);
+
+        cfx = fabs(delx)*fpair;
+        cfy = fabs(dely)*fpair;
+        cfz = fabs(delz)*fpair;
+        cfmag = sqrt(cfx*cfx + cfy*cfy + cfz*cfz);
+        compforce[i][0] += cfmag;
+        compforce[i][1] += cfx;
+        compforce[i][2] += cfy;
+        compforce[i][3] += cfz;
 
       }
     }
-  }
-
-  double all[4];
-  MPI_Allreduce(cf,all,4,MPI_DOUBLE,MPI_SUM,world);
-  scalar += all[0];
-  vector[0] += all[1];
-  vector[1] += all[2];
-  vector[2] += all[3];
-}
-
-/* ---------------------------------------------------------------------- */
-
-
-
-
-
-
-
-/* ---------------------------------------------------------------------- */
-
-int ComputePEAtom::pack_reverse_comm(int n, int first, double *buf)
-{
-  int i,m,last;
-
-  m = 0;
-  last = first + n;
-  for (i = first; i < last; i++) buf[m++] = compforce[i];
-  return m;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void ComputePEAtom::unpack_reverse_comm(int n, int *list, double *buf)
-{
-  int i,j,m;
-
-  m = 0;
-  for (i = 0; i < n; i++) {
-    j = list[i];
-    compforce[j] += buf[m++];
   }
 }
 
@@ -222,23 +151,9 @@ void ComputePEAtom::unpack_reverse_comm(int n, int *list, double *buf)
    memory usage of local atom-based array
 ------------------------------------------------------------------------- */
 
-double ComputePEAtom::memory_usage()
+double ComputeCompForceAtom::memory_usage()
 {
-  double bytes = nmax * sizeof(double);
+  double bytes = nmax*4 * sizeof(double);
   return bytes;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
