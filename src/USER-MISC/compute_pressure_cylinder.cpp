@@ -54,19 +54,25 @@ ComputePressureCyl::ComputePressureCyl(LAMMPS *lmp, int narg, char **arg) :
   tangent(NULL), ephi_x(NULL), ephi_y(NULL), binz(NULL)
 {
   if (lmp->citeme) lmp->citeme->add(cite_compute_pressure_cylinder);
-  if (narg != 7) error->all(FLERR,"Illegal compute pressure/cylinder command");
+  if (narg != 7) error->all(FLERR,"Illegal compute pressure/cylinder command. Invalid number of arguments.");
 
   zlo=force->numeric(FLERR,arg[3]);
   zhi=force->numeric(FLERR,arg[4]);
   Rmax=force->numeric(FLERR,arg[5]);
   bin_width=force->numeric(FLERR,arg[6]);
 
-  if ((bin_width <= 0.0) || (bin_width > Rmax))
-    error->all(FLERR,"Illegal compute pressure/cylinder command");
-  if ((zhi < zlo) || ((zhi-zlo) < bin_width))
-    error->all(FLERR,"Illegal compute pressure/cylinder command");
-  if ((zhi > domain->boxhi[2]) || (zlo < domain->boxlo[2]))
-    error->all(FLERR,"Illegal compute pressure/cylinder command");
+  if (zlo < domain->boxlo[2])
+    error->all(FLERR,"Illegal compute pressure/cylinder command. zlo must be equal to or greater than simulation box minimum z value.");
+  if (zhi < zlo)
+    error->all(FLERR,"Illegal compute pressure/cylinder command. zhi must be equal to or greater than zlo.");
+  if (zhi > domain->boxhi[2])
+    error->all(FLERR,"Illegal compute pressure/cylinder command. zhi must be less than or equal to simulation box maximum z value.");
+  if (bin_width <= 0.0)
+    error->all(FLERR,"Illegal compute pressure/cylinder command. Bin width must be greater than zero.");
+  if (bin_width > Rmax)
+    error->all(FLERR,"Illegal compute pressure/cylinder command. Bin width must be less than or equal to Rmax.");
+  if ((zhi-zlo) < bin_width)
+    error->all(FLERR,"Illegal compute pressure/cylinder command. zhi minus zlo must be equal to or greater than bin width.");
 
   nbins=(int)(Rmax/bin_width);
   nzbins=(int)((zhi-zlo)/bin_width);
@@ -74,8 +80,10 @@ ComputePressureCyl::ComputePressureCyl(LAMMPS *lmp, int narg, char **arg) :
   // NOTE: at 2^22 = 4.2M bins, we will be close to exhausting allocatable
   // memory on a 32-bit environment. so we use this as an upper limit.
 
-  if ((nbins < 1) || (nzbins < 1) || (nbins > 2<<22) || (nzbins > 2<<22))
-    error->all(FLERR,"Illegal compute pressure/cylinder command");
+  if ((nbins < 1) || (nzbins < 1))
+    error->all(FLERR,"Illegal compute pressure/cylinder command. Number of bins in one or more dimensions is less than 1.");
+  if ((nbins > 2<<22) || (nzbins > 2<<22))
+    error->all(FLERR,"Illegal compute pressure/cylinder command. Number of bins in one or more dimensions is greater than the upper limit (2^22).");
 
   array_flag=1;
   vector_flag=0;
