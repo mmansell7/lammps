@@ -74,7 +74,6 @@ void ComputeCompForceAtom::init_list(int /* id */, NeighList *ptr)
 void ComputeCompForceAtom::compute_peratom()
 {
   invoked_peratom = update->ntimestep;
-  
   // grow compforce array if necessary
   // needs to be atom->nmax in length
 
@@ -87,7 +86,7 @@ void ComputeCompForceAtom::compute_peratom()
   
   int i,j,ii,jj,inum,jnum,itype,jtype;
   double xtmp,ytmp,ztmp,delx,dely,delz,fpair;
-  double rsq,factor_lj,factor_coul,cfx,cfy,cfz,cfmag;
+  double r,rsq,factor_lj,factor_coul,cfx,cfy,cfz,cfmag;
   int *ilist,*jlist,*numneigh,**firstneigh;
 
   for (i = 0; i < nmax; i++)
@@ -100,8 +99,8 @@ void ComputeCompForceAtom::compute_peratom()
   int nlocal = atom->nlocal;
   double *special_lj = force->special_lj;
   double *special_coul = force->special_coul;
-  int newton_pair = force->newton_pair;
 
+  neighbor->build_one(list);
   inum = list->inum;
   ilist = list->ilist;
   numneigh = list->numneigh;
@@ -127,16 +126,17 @@ void ComputeCompForceAtom::compute_peratom()
       delx = xtmp - x[j][0];
       dely = ytmp - x[j][1];
       delz = ztmp - x[j][2];
-      rsq = delx*delx + dely*dely + delz*delz;
+      rsq  = delx*delx + dely*dely + delz*delz;
+      r    = sqrt(rsq);
       jtype = type[j];
 
       if (rsq < force->pair->cutsq[itype][jtype]) {
         force->pair->single(i,j,itype,jtype,rsq,factor_coul,factor_lj,fpair);
 
-        cfx = fabs(delx)*fpair;
-        cfy = fabs(dely)*fpair;
-        cfz = fabs(delz)*fpair;
-        cfmag = sqrt(cfx*cfx + cfy*cfy + cfz*cfz);
+        cfmag = r*fpair;
+        cfx   = fabs(delx)*fpair;
+        cfy   = fabs(dely)*fpair;
+        cfz   = fabs(delz)*fpair;
         compforce[i][0] += cfmag;
         compforce[i][1] += cfx;
         compforce[i][2] += cfy;
