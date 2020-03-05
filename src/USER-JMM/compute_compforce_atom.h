@@ -35,7 +35,10 @@ class ComputeCompForceAtom : public Compute {
 
  private:
   int nmax;
-  double **compforce;
+  double **compforce;       // [0]: compressive force magnitude
+                            // [1]: x compressive force
+                            // [2]: y compressive force
+                            // [3]: z compressive force
   class NeighList *list;
 };
 
